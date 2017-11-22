@@ -1,0 +1,68 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <gps.h>
+#include <time.h>
+#include <string.h>
+#include <signal.h>
+
+#define GPS_LOG_PATH "/media/mmcblk0p1/gps_log_%04d-%02d-%02d.dat"
+#define MAX_LOG_BUFFER 256
+
+static int exit_loop = 1;
+void signalHandler(int signum)
+{
+    printf("GPS Logger Finishing[%d]..\n", signum);
+    exit_loop = 0;
+}
+
+int main(void) {
+
+    loc_t data;
+    time_t rawtime;
+    struct tm * timeinfo;
+    
+    char log_path[MAX_LOG_BUFFER] = { 0 };
+    char log_data[MAX_LOG_BUFFER] = { 0 };
+    
+    signal(SIGINT, signalHandler);
+
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    sprintf(log_path, GPS_LOG_PATH,                 
+                timeinfo->tm_year + 1900, 
+                timeinfo->tm_mon + 1, 
+                timeinfo->tm_mday);
+
+    printf("GPS Logger Started : %s\n", log_path);
+
+    FILE *fp = fopen(log_path, "a");
+
+    if(fp == NULL) {
+        printf("File open failure : %s\n", log_path);
+        return EXIT_FAILURE;
+    }
+    //fseek(fp, 0, SEEK_END);
+
+    gps_init();
+
+    while (exit_loop) {
+        gps_location(&data);
+
+        time(&rawtime);
+        timeinfo = localtime(&rawtime);
+        memset(log_data, 0, MAX_LOG_BUFFER);
+        sprintf(log_data, "%02d:%02d:%02d %lf %lf|", 
+                timeinfo->tm_hour,
+                timeinfo->tm_min,
+                timeinfo->tm_sec,
+                data.latitude, data.longitude);
+
+        //printf("%s[%lu]\n", log_data, strlen(log_data));
+        fwrite(log_data, sizeof(char), strlen(log_data), fp);
+    }
+        
+    printf("GPS Logger Finished : %s\n", log_path);
+    fclose(fp);
+    return EXIT_SUCCESS;
+}
+
